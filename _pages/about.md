@@ -18,6 +18,6 @@ I am a Data Scientist exploring applications of AI in the healthcare realm.
 
 Previously I was a Program Manager at Microsoft in the Bing Ads and Data Security & Privacy teams.
 
-I completed my undergraduate and graduate degrees at [Washington University in St. Louis](https://wustl.edu/) and had the wonderful opportunity to conduct research under [Dr. Chenyang Lu](https://www.cse.wustl.edu/~lu/). 
+I completed my undergraduate and graduate degrees at [Washington University in St. Louis](https://wustl.edu/) during which I had wonderful opportunities to conduct research under [Dr. Chenyang Lu](https://www.cse.wustl.edu/~lu/). 
 
-I enjoy spending time with my partner and our English Springer Spaniel, Huck. When I'm not playing with our dog, you can find me running across the various trails in Seattle. 
+I enjoy spending time with my partner and our English Springer Spaniel, Huck. While Huck and I aren't playing fetch, you can find me running across the various trails in Seattle. 
