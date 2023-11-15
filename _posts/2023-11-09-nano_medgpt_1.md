@@ -199,13 +199,16 @@ You may notice there are some terms included in the forward method that we did n
 
 We can go ahead and generate samples from the untrained Bigram LM to see what it will spit out prior to any training. 
 
-// example
+> 0l6fu1be10mrb3e97hmdbmfdn7afclyax 87 3b2i1 b17az3 8qyacp30u4ty3xfe0zlhpn8817wqq5xsilhpo3bnirffzb8o2mx
 
-As expected, it's basically a uniform prediction of a random characters. This would hardly be helpful to the already tired clinician. Let's see if the Bigram LM can do any better after training for // x epochs etc. 
+>
 
-// example
+As expected, it's basically a uniform prediction of a random characters. This would hardly be helpful to the already tired clinician. Let's see if the Bigram LM can do any better after training for 500 epochs.
 
-It's clear both the validation los s and the samples produced that the Bigram LM lacks sufficient representational capacity to meaningfully learn the underlying relationships between the text in the corpus. It is not well suited to this task and we require a heavier hammer. 
+> 0p d1hofcofs3rdaexrktapk9 tjca7rv5awzu6xoklclrdroknoghevy6iyzdrvcv5901udzerklhko7 3c683w7mcip t057cof
+>
+
+It's clear both the validation loss (3.49) and the samples produced that the Bigram LM lacks sufficient representational capacity to meaningfully learn the underlying relationships between the text in the corpus. It is not well suited to this task and we require a heavier hammer. 
 
 ## Transformers
 GPTs are "Generative Pre-trained Transformers"; I would be remiss if I did not spend some time talking about transformers as they are the critical building block in this network architecture. More importantly, they are one of the innovations that has led to drastic improvements in NLP over the past 6 years and the same concepts are being applied for massive gains in computer vision currently. Transformers will be the key tool that allow us to produce a coherent model. 
@@ -252,11 +255,22 @@ The authors of the original Self Attention paper, titled "Attention is All You N
 Let's try and tie this back together with our Bayes' equation from above. We said we were really interested in estimating the likelihood $ P(k \mid x) $ and the prior $P(x)$. Recall that the likelihood is how likely the given context is given the next token, and the prior $P(x)$ is the prior probability of the next character. From our token embedding tables, we've gotten pretty good at estimating $P(x)$. Perhaps most interesting, however, is that we've created numerous interactions in our network between the context and the next token through attention (and masking) and then stacked many dense Linear layers on top of these interactions. In other words, the Self Attention Heads, coupled with Linear layers, help us better estimate the likelihood $P(k \mid x)$. Neural networks, particularly deep networks, are black boxes and very difficult to explain. However, I find that the visual representation of the network coupled with developing some mathematical intuition behind the individual layers helps make clear what the network is doing during each step of training. 
 
 ### Training the Nano GPT Model
-I have very intentionally left unspecified the size of the network up to this point. We have ommitted the number of Transformer Blocks, number of MultiHead Attention Blocks, and number of Self-Attention Heads. Moreover, we have not discussed the dimensions of the hidden layers of the network, the learning rate, the batch size, or the context length. Recall that we are still developing on a local machine with very real physical constraints and your local system's constraints will likely dictate choice in hyperparamters for local development. Please refer to the GitHub repository for the latest on the hyperparamters used for my local development. We will discuss these parameters in more detail (and scaling them up!) in Part 2 of the blog series when we move to the cloud, but for now, let's just see how the model performs after a few epochs of training. 
+I have very intentionally left unspecified the size of the network up to this point. We have ommitted the number of Transformer Blocks, number of MultiHead Attention Blocks, and number of Self-Attention Heads. Moreover, we have not discussed the dimensions of the hidden layers of the network, the learning rate, the batch size, or the context length. Recall that we are still developing on a local machine with very real physical constraints and your local system's constraints will likely dictate choice in hyperparamters for local development. Please refer to the GitHub repository for the latest on the hyperparamters used for my local development. We will discuss these parameters in more detail (and scaling them up!) in Part 2 of the blog series when we move to the cloud, but for now, let's just see how the model performs after a few epochs of training. The validation loss reaches around 1.95 after 500 epochs of training a fairly small GPT model.
 
-// example
+```python
+print(generate_text(model, 100))
+```
+> 0 mg od  ne1 8 tablets t by toleut 1406 1 on oftopy  4na discre 8 reur neg theout getly  earvers ri c
+>
 
-Believe it or not, we're actually starting to get words that belong in the English dictionary! Most of the output is still garbled and nonsensical, but we have developing the critical building blocks for our language model. Seeing real words produced by a model trained only for fifteen minutes on a tiny amount of data while trying to predict the next character (not even a whole word!) is quite exciting. 
+What about when we supply the first few words for the model and have it attempt to complete the rest?
+```python 
+print(prompt(model, "Patient History: Ben is "))
+```
+>patient history ben is sight of his ange heealve oter  hp wecteransa pormassions   reaniom   ht  his ov sup in af repentgio
+>
+
+Believe it or not, we're actually starting to get words that belong in the English dictionary! Most of the output is still garbled and nonsensical, but we have developed the critical building blocks for our language model. Seeing real words produced by a model trained only for ten minutes on a tiny amount of data while trying to predict the next character (not even a whole word!) is quite exciting. 
 
 # Wrapping Up
 Thanks for joining! Please stay tuned for Part 2 of the blog series where we will cover how to scale our model size and dataset size up using the cloud, as well as evaluate the effectiveness of our model. 
