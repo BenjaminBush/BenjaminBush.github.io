@@ -19,11 +19,38 @@ For this project, we make use of the [MIMIC-IV Dataset](https://physionet.org/co
 
 MIMIC-IV provides a wealth of interesting data for myriad research purposes. For this project, we are interested in the ```mimiciv_note``` module, which includes deidentified free text clinical notes for hospital details. We are specifically intersted in the discharge summaries, which can be found in the ```discharge``` table. 
 ## Exploratory Data Analysis
-number of notes
-distribution of note length
-total raw vocabulary size (words, characters)
-what data is de-identified
-what is the general format of the note?
+There are a total of 331,793 discharge notes in the dataset. The average note length is 10,551 characters with a standard deviation of 4,452 characters. There are a total of 189 unique characters in the dataset. 
+
+Per the producers of the dataset, data was deidentified using a custom rule-based approach combined with a neural network trained for deidentification. Each instance of PHI is replaced with three underscores. The following are examples (non-exhaustive) of PHI that have been deidentified: 
+- Patient Name
+- Patient Age
+- Patient DoB
+- Number of Units of Medication Received of Acute Drugs
+- Hospital Name
+- Attending Name
+
+Medical notes are quite comprehensive. For somebody who has never worked in a hospital, or had to write a medical note, I was amazed with the level of detail included in each note. After reading a handful of examples of the notes, I'm surprised clinicians are able to complete notes as fast as they do. This reinforces my belief that note completion is an important use case. I'll aim to briefly summarize the different sections in the note for those that may be unfamiliar:
+
+1. In-Take Information
+    - General Administrative Information (Name, DoB, Sex, Service, Allergies, Attendied, etc.)
+    - Chief Complaint: Why did the patient come into the hospital?
+    - History of Present Illness (generally related to Chief Complaint)
+    - Past Medical History
+    - Social History
+    - Family History
+2. Examination & Test Results
+    - Physical Exam (Pulse, BP, Clinician's general evaluation of patient's current condition)
+    - Relevant bloodwork (e.g., WBC, Glucose levels, etc. at different times during testing)
+    - Relevant Imaging, other tests. 
+    - Findings & Analysis from various tests. 
+    - Hospital course (describing patient's routing through the hospital and/or any referals). 
+3. Discharge 
+    - Medications, Condition, Diagnosis
+    - Followup Instructions
+
+Observe that medical notes are also highly personalized. Each patient has a unique medical history or can present with different symptoms, which leads to different testing/treatment, and ultimately a different hospital course. However, note completion can only be useful for some of the sections. For example, it may not be useful for entering information related to test results (e.g., bloodwork) or General Administrative Information. It may be more useful for the discharge section. It may have limited utility in suggesting autocompletion for certain "History" sections as well as findings and analysis from the various tests. 
+
+I did not break down the discharge notes across different services or patient conditions, so it makes sense to see such a high standard deviation in the note length. A patient who expired on their way to the hospital from an automobile accident will undoubtedly have a shorter note than a patient with a complex medical history (e.g., seizures due to low blood sugar).  
 
 # Local Development
 To develop the inital model, I followed [Karpathy's YouTube tutorial](https://www.youtube.com/watch?v=kCc8FmEb1nY&t=5974s) in which he builds a GPT from scratch using the Shakespeare data. In my case, of course I used the ```mimiciv_note``` data. Karpathy provides an excellent overview of language modeling and transformer architecture and I highly recommend readers to visit his channel, or his blog. 
@@ -31,19 +58,21 @@ To develop the inital model, I followed [Karpathy's YouTube tutorial](https://ww
 Given we are working on a "nano" scale of language modeling, we formulate our learning task as next character prediction. Observe that this differs from some of the current standard of predicting the next word, or sub-word. We elect this choice primarily due to compute and data constraints; we lack sufficient compute to be able to handle next word prediction and similarly our dataset is not large enough to meaningfully learn the relationships between all of the words in the corpus. 
 
 ## Data Preprocessing
-As we discoverd in our exploratory data anlysis, the medical note data is messy! Before we begin any model development, it will be important to clean the dataset and normalize the inputs to ensure as smooth of a training process as possible. 
+As we discoverd in our exploratory data anlysis, the medical note data contains some inherent structure, but the free text itself can be quite messy! Before we begin any model development, it will be important to clean the dataset and normalize the inputs to ensure as smooth of a training process as possible. 
 
 ### Extracting from Google BigQuery
-The ```mimiciv_note``` dataset is located in BigQuery. Fortunately, BigQuery allows you to export the results of a query to Google Cloud Storage. A simple:<p>
-``` SELCT text FROM discharge;``` <p>
-run against the ```mimiciv_note``` database will produce the desired result. We can then access the Google Cloud Storage bucket in the browser and download the uncompressed data. Given the size of the data, Google split the download into 7 files. For ease of reference, we refer to each of these files as "parts"; "Part 0" refers to the first chunk of the results returned from the query, "Part 1" contains the next chunk, and so on. They are approximately equal size in their row count. We will ultimately use Parts 0-5 for training and Part 6 as our test set.  This is approximately an 80/20 split. However, for local development we can only utilize the first // HOW MANY ROWS? of Part 0 due to local machine memory constraints. 
+The ```mimiciv_note``` dataset is located in BigQuery. Fortunately, BigQuery allows you to export the results of a query to Google Cloud Storage. A simple:
+```sql
+SELCT text FROM discharge;
+``` 
+run against the ```mimiciv_note``` database will produce the desired result. We can then access the Google Cloud Storage bucket in the browser and download the uncompressed data. Given the size of the data, Google split the download into 7 files. For ease of reference, we refer to each of these files as "parts"; "Part 0" refers to the first chunk of the results returned from the query, "Part 1" contains the next chunk, and so on. They are approximately equal size in their row count. We will ultimately use Parts 0-5 for training and Part 6 as our test set.  This is approximately an 80/20 split. However, for local development we can only utilize the first 1,000,000 characters of Part 0 due to local machine memory constraints. 
 
 ### Text Cleaning
 Data and compute restrictions influenced our choice to formulate our task as next character prediction instead of next word prediction. These constraints will also be influential in our text cleaning methodology. 
 
 The first preprocessing step is to lowercase all of the text. We lack sufficient data to learn representations between proper nouns, new sentences, etc. Furthermore, upon inspection of some of the notes, there are erroneous capitalizations of words. Lowercasing all of the words helps us begin the normalize the text for the machine to more easily understand. 
 
-We also discover that the the text from the medical notes either includes some special characters, or was included into the dataset with different encodings. It will be important to make sure we use the same text encoding throughout handling the data. To that end, we first encode the raw bytes into ascii, ignoring any characters that do not fit into the ascii character set, and then decode into utf-8. 
+We also discover that the the text from the medical notes either includes some special characters, or was included into the dataset with different encodings. For instance, characters like "Æ" and "é" were included. It will be important to make sure we use the same text encoding throughout handling the data. To that end, we first encode the raw bytes into ascii, ignoring any characters that do not fit into the ascii character set, and then decode into utf-8. 
 
 Finally, we want to restrict our vocabularly to exclude special punctuation and other characters. We only desire to have alphanumeric characters and spaces to minimize the complexity of the text. To that end, we can write two simple regular expressions to remove unwanted text. 
 
@@ -80,13 +109,13 @@ Encodings have a very rich history and they're worth talking about a little more
 
 If you were to devise a scheme to create embeddings, a natural thought would be to have words that have similar meaning are "closer" in vector space (e.g., cosine similarity ~ 1). The classic example of this would is that "King" and "Queen" are conceptually similar and you could imagine that adding the vector word embedding of "woman" to the vector word embedding of "King" would produce a vector that is very similar to the vector word embedding of "Queen". In other words, 
 $$\vec{woman} + \vec{King} = \vec{Queen}$$
-This is concept is applied in the "Word2Vec" embedding scheme, which was first introduce in 2013. However, this approach suffered significant drawbacks. 
+This is concept is applied in the "Word2Vec" embedding scheme, which was first introduced in 2013. However, this approach suffered significant drawbacks. 
 - Defining the vectors for each word is cumbersome. 
 - Handling minor variation in words is difficult (e.g., through verb conjuction, or words that share similar stems)
 - The notion of similarity in the vector space falls apart for most of the words in the dictionary. 
 While one may conclude that $$\vec{fruit} + \vec{yellow} = \vec{banana}$$, what does $$\vec{fruit} + \vec{red} = ?$$ Strawberries? Raspberries? Something else entirely?<br>
 
-This ultimately led to two key developments in NLP. The first is to let the machine create better embeddings as part of the learning process. The second was an innovation in the way we normally do tokenization; by splitting words into "sub-words", we can pass on some of the linguistic properties of words to the machine. For instance, the word "running" might be broken into subwords, ["run", "ning"]. The machine can easily understand "run" as second subword indicates the conjugation of the verb. The same concept applies to non-verbs, e.g., "fireplace" becomes ["fire", "place"]. 
+This ultimately led to two key developments in NLP. The first is to let the machine create better embeddings as part of the learning process. The second was an innovation in the way we perform tokenization; by splitting words into "sub-words", we can pass on some of the linguistic properties of words to the machine. For instance, the word "running" might be broken into subwords, ["run", "ning"]. The machine can easily understand "run" as second subword indicates the conjugation of the verb. The same concept applies to non-verbs, e.g., "fireplace" becomes ["fire", "place"]. 
 
 
 There are myriad open source models that will produce embeddings for you. OpenAI also offers an Embedding API for you to leverage the same embeddings used in ChatGPT. However, we'll opt for something simpler. After all, part of the motivation for this project is to get our hands dirty!
@@ -116,16 +145,21 @@ encode = lambda s: [stoi[c] for c in s]
 decode = lambda i: ''.join([itos[j] for j in i])
 ```
 
-As an example, the sentence "Huck is sleeping next to the fireplace" can be encoded as<p> [17, 30, 12, 20, 36, 18, 28, 36, 28, 21, 14, 14, 25, 18, 23, 16, 36, 23, 14, 33, 29, 36, 29, 24, 36, 29, 17, 14, 36, 15, 18, 27, 14, 25, 21, 10, 12, 14]<br>
+As an example, the sentence 
+
+"Huck is sleeping next to the fireplace" 
+
+can be encoded as 
+
+[17, 30, 12, 20, 36, 18, 28, 36, 28, 21, 14, 14, 25, 18, 23, 16, 36, 23, 14, 33, 29, 36, 29, 24, 36, 29, 17, 14, 36, 15, 18, 27, 14, 25, 21, 10, 12, 14]<br>
+
  Observe that the capital "H" in "Huck" first needs to be lowercased to "h" since our vocabulary is produced from our clean_text function. <br><br>
- Now that we have successfully cleaned our dataset, and creating a way to represent that dataset to the machine, we can begin developing a machine learning model to predict the next character!
+ Now that we have successfully cleaned our dataset, and created a way to represent that dataset to the machine, we can begin developing a machine learning model to predict the next character!
 
 ## Language Modeling
-Let us discuss in greater detail what "predict the next character" means. For simplicity, I have excluded the words "given some context". In this case, "some context" just means the previous characters. It's easy enough to think about this like an autocomplete task -- when you are searching in your search bar, or writing an e-mail, your browser will often suggest an autocomplete to help you achieve your goal more quickly. That is exactly what we aim to do here. Thus, we revise the formal statement of our task to<br>
+Let us discuss in greater detail what "predict the next character" means. For simplicity, I have excluded the words "given some context". In this case, "some context" just means the previous characters. It's easy enough to think about this like an autocomplete task -- when you are searching in your search bar, or writing an e-mail, your browser will often suggest an autocomplete to help you achieve your goal more quickly. That is exactly what we aim to do here. Thus, we revise the formal statement of our task to<br><br>
 Predict the next character given the previous $k$ characters. <br>
 Where $k \geq 0$. <br>
-
-For those of you that have used ChatGPT, you supply context in the form of the chat prompt. 
 
 Let's aim to formulate this mathematically. When we seek to predict the next character, there is some probability associated with every character in our vocabulary. 
 We formulate this probability of character $x$ being the next character given context $k$ as <br>
@@ -137,7 +171,7 @@ Let's briefly examine each of the terms.
 - $ P(x) $ is the prior probability of the next character. This can be directly calculated from the dataset (how often does charcter $x$ occur?)
 - $ P(k) $ is the prior probability of the context. This can be directly calculated from the dataset. 
 
-Something important to note here is that so far we have only specified the constraint $k \geq 0$. Although theoretically $k$ does not need to have an upper bound, in practice it does -- we do not have unlimited memory and if we allow $k$ to get big enough, then even if we could train a model that big the resulting model would likely just be reguritating information it had already seen. For local development, we bound $ 0 \leq k \leq 8$ and revist this choice in the second part of the blog.
+Something important to note here is that so far we have only specified the constraint $k \geq 0$. Although theoretically $k$ does not need to have an upper bound, in practice it does -- we do not have unlimited memory and if we allow $k$ to get big enough, then even if we could train a model that big, the resulting model would likely just be regurgitating information it had already seen. For local development, we will ultimately bound $ 0 \leq k \leq 256$ and revist this choice in the second part of the blog.
 
 Observe that the NLP task essentially boils down to estimating $P(x \mid k)$, or $P(k \mid x)$, which is a probability distribution. The model we develop will seek to learn this probability distribution and then we can sample from this distribution to generate new text. That is why this class of models are considered "Generative AI". 
 * Not only can they "generate" new text, but 
@@ -148,9 +182,9 @@ Let's take our theoretical understanding of the language modeling task and apply
 ### Bigram Model
 Recall that a bigram model is a specific type of n-gram, where n=2. It is also known as a bag of words model (or in our case, bag of characters!). In this case, it fixes the context, $k = 2$; in other words, given the previous two characters, predict the next character. 
 
-We can visualize this as a 2D array where of size (vocabulary_size x vocabulary_size). The entries represent the counts of how frequently any pair of characters occurs, and then normalizing these counts into a probability distribution. This is easily achieved through the PyTorch ``nn.Embedding`` layer. 
+We can visualize this as a 2D array where of size $size(vocabulary) \times size(vocabulary)$. The entries represent the counts of how frequently any pair of characters occurs, and then we can normalize these counts into a probability distribution. This is easily achieved through the PyTorch ``nn.Embedding`` module. 
 
-We need to implement two functions for this model to be trained -- a "forward" method for the forward pass of training, and a "generate" method for generating text. 
+We need to implement two functions for this model prior to training -- a "forward" method for the forward pass of training, and a "generate" method for generating text. 
 
 The forward method is quite simple. We simply perform a lookup from our Embedding table (remember these are the counts of occurrences) and then compare the entry of the lookup table to the true value (what the next character actually is). We can use the cross-entropy loss funciton to calculate loss and let PyTorch handle the backpropagation step. 
 
@@ -252,10 +286,14 @@ The authors of the original Self Attention paper, titled "Attention is All You N
 > An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatability function of query with the corresponding key. 
 >
 
-Let's try and tie this back together with our Bayes' equation from above. We said we were really interested in estimating the likelihood $ P(k \mid x) $ and the prior $P(x)$. Recall that the likelihood is how likely the given context is given the next token, and the prior $P(x)$ is the prior probability of the next character. From our token embedding tables, we've gotten pretty good at estimating $P(x)$. Perhaps most interesting, however, is that we've created numerous interactions in our network between the context and the next token through attention (and masking) and then stacked many dense Linear layers on top of these interactions. In other words, the Self Attention Heads, coupled with Linear layers, help us better estimate the likelihood $P(k \mid x)$. Neural networks, particularly deep networks, are black boxes and very difficult to explain. However, I find that the visual representation of the network coupled with developing some mathematical intuition behind the individual layers helps make clear what the network is doing during each step of training. 
+Let's try and tie this back together with our Bayes' equation from above. We said we were really interested in estimating the likelihood $ P(k \mid x) $ and the prior $P(x)$. Recall that the likelihood is how likely the given context is given the next token, and the prior $P(x)$ is the prior probability of the next character. 
+
+From our token embedding tables, we've gotten pretty good at estimating $P(x)$. Perhaps most interesting, however, is that we've created numerous interactions in our network between the context and the next token through attention (and masking) and then stacked many dense Linear layers on top of these interactions. In other words, the Self Attention Heads, coupled with Linear layers, help us better estimate the likelihood $P(k \mid x)$. 
+
+Neural networks, particularly deep networks, are black boxes and very difficult to explain. However, I find that the visual representation of the network coupled with developing some mathematical intuition behind the individual layers helps make a little more clear what the network is doing during each step of training. 
 
 ### Training the Nano GPT Model
-I have very intentionally left unspecified the size of the network up to this point. We have ommitted the number of Transformer Blocks, number of MultiHead Attention Blocks, and number of Self-Attention Heads. Moreover, we have not discussed the dimensions of the hidden layers of the network, the learning rate, the batch size, or the context length. Recall that we are still developing on a local machine with very real physical constraints and your local system's constraints will likely dictate choice in hyperparamters for local development. Please refer to the GitHub repository for the latest on the hyperparamters used for my local development. We will discuss these parameters in more detail (and scaling them up!) in Part 2 of the blog series when we move to the cloud, but for now, let's just see how the model performs after a few epochs of training. The validation loss reaches around 1.95 after 500 epochs of training a fairly small GPT model.
+I have very intentionally left unspecified the size of the network up to this point. We have ommitted the number of Transformer Blocks, number of MultiHead Attention Blocks, and number of Self-Attention Heads. Moreover, we have not discussed the dimensions of the hidden layers of the network, the learning rate, or the batch size. Recall that we are still developing on a local machine with very real physical constraints and your local system's constraints will likely dictate choice in hyperparamters for local development. Please refer to the GitHub repository for the latest on the hyperparamters used for my local development. We will discuss these parameters in more detail (and scaling them up!) in Part 2 of the blog series when we move to the cloud, but for now, let's just see how the model performs after a few epochs of training. The validation loss reaches around 1.95 after 500 epochs of training a fairly small GPT model.
 
 ```python
 print(generate_text(model, 100))
@@ -265,9 +303,9 @@ print(generate_text(model, 100))
 
 What about when we supply the first few words for the model and have it attempt to complete the rest?
 ```python 
-print(prompt(model, "Patient History: Ben is "))
+print(prompt(model, "History of Present Illness: Mr. Bush is a 27 year old "))
 ```
->patient history ben is sight of his ange heealve oter  hp wecteransa pormassions   reaniom   ht  his ov sup in af repentgio
+>history of present illness mr bush is a 27 year old press  shoommittine genties you xures cber  suee admissionend clove with autie as youres dital ptati
 >
 
 Believe it or not, we're actually starting to get words that belong in the English dictionary! Most of the output is still garbled and nonsensical, but we have developed the critical building blocks for our language model. Seeing real words produced by a model trained only for ten minutes on a tiny amount of data while trying to predict the next character (not even a whole word!) is quite exciting. 

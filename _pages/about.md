@@ -14,7 +14,7 @@ latest_posts: true  # includes a list of the newest posts
 selected_papers: false # includes a list of papers marked as "selected={true}"
 social: false  # includes social icons at the bottom of the page
 ---
-I am a Data Scientist exploring applications of AI in the healthcare realm. 
+I am a Data Scientist and Product Builder exploring applications of AI in the healthcare realm. 
 
 Previously I was a Program Manager at Microsoft in the Bing Ads and Data Security & Privacy teams.
 
